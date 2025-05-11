@@ -3,6 +3,8 @@
 ###
 # This script archives an Xcode project and uploads it to TestFlight.
 
+set -o pipefail
+
 # Displays usage information and exits.
 usage() {
     echo "Usage: $0 [options]"
@@ -200,8 +202,9 @@ archive_app() {
         pipe_cmd="$pipe_cmd | xcbeautify"
     fi
 
-    # Execute pipe chain in a subshell and capture status
-    local archive_status=$(eval "$pipe_cmd"; echo ${PIPESTATUS[0]})
+    # Execute pipe chain
+    eval "$pipe_cmd"
+    local archive_status=$?
 
     # If archive succeeded, export the archive
     if [ $archive_status -eq 0 ]; then
@@ -223,8 +226,9 @@ archive_app() {
         # Construct pipe chain
         local export_pipe_cmd="$export_cmd 2>&1 | tee -a '$log_file'"
 
-        # Execute pipe chain in a subshell and capture status
-        local export_status=$(eval "$export_pipe_cmd"; echo ${PIPESTATUS[0]})
+        # Execute pipe chain
+        eval "$export_pipe_cmd"
+        local export_status=$?
         return $export_status
     fi
 
@@ -257,8 +261,9 @@ upload_to_testflight() {
     # Construct pipe chain
     local pipe_cmd="$upload_cmd 2>&1 | tee '$log_file'"
 
-    # Execute pipe chain in a subshell and capture status
-    local upload_status=$(eval "$pipe_cmd"; echo ${PIPESTATUS[0]})
+    # Execute pipe chain
+    eval "$pipe_cmd"
+    local upload_status=$?
     return $upload_status
 }
 

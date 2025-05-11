@@ -3,6 +3,8 @@
 ###
 # This script build and tests an Xcode project or Swift Package using xcodebuild.
 
+set -o pipefail
+
 # Displays usage information and exits.
 usage() {
     echo "Usage: $0 [options]"
@@ -159,8 +161,9 @@ if command -v xcbeautify >/dev/null 2>&1; then
     PIPE_CMD="$PIPE_CMD | xcbeautify"
 fi
 
-# Execute pipe chain in a subshell and capture status
-CMD_STATUS=$(eval "$PIPE_CMD"; echo ${PIPESTATUS[0]})
+# Execute pipe chain
+eval "$PIPE_CMD"
+CMD_STATUS=$?
 
 # Report status and exit
 if [ $CMD_STATUS -eq 0 ]; then
