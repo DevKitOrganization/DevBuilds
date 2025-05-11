@@ -1,8 +1,16 @@
 # DevBuilds
 
-Description forthcoming.
+DevBuilds contains ready-to-use scripts for building, testing, and releasing apps and packages using
+Apple’s Xcode tools. The scripts are intended to provide projects with a simple way to run CI tasks
+on remote systems like GitHub Actions. Importantly, there’s no need to install Ruby or some other 
+third-party runtime.
 
 View our [changelog](CHANGELOG.md) to see what’s new.
+
+
+## Usage
+
+Description forthcoming.
 
 
 ## Development Requirements
