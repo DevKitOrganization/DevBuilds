@@ -13,7 +13,7 @@ usage() {
     echo "                             build-for-testing, test, test-without-building)"
     echo "  -b, --build-path PATH      Derived data path (default: .build)"
     echo "  -c, --config CONFIG        Build configuration (default: Debug)"
-    echo "  -d, --destination DEST     Destination device specifier (optional, derived from platform)"
+    echo "  -d, --destination DEST     Destination device specifier (required)"
     echo "  -h, --help                 Show this help message"
     echo "  -p, --project PROJECT      Xcode project path (required)"
     echo "  -s, --scheme SCHEME        Scheme name (required)"

@@ -214,7 +214,6 @@ archive_app() {
         export_cmd="$export_cmd -archivePath '$archive_path'"
         export_cmd="$export_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
         export_cmd="$export_cmd -exportPath '$archive_path/Products'"
-        export_cmd="$export_cmd -allowProvisioningUpdates -allowProvisioningDeviceRegistration"
         export_cmd="$export_cmd -authenticationKeyPath '$api_key_path' -authenticationKeyID '$AUTH_KEY_ID'"
         export_cmd="$export_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
         export_cmd="$export_cmd $OTHER_EXPORT_ARGS"
