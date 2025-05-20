@@ -11,7 +11,7 @@ usage() {
     echo "Options:"
     echo "  -a, --action ACTION        Action to perform (default: build, options: build,"
     echo "                             build-for-testing, test, test-without-building)"
-    echo "  -b, --build-path PATH      Derived data path (default: .build)"
+    echo "  -b, --build-path PATH      Build products path (default: .build)"
     echo "  -c, --config CONFIG        Build configuration (default: Debug)"
     echo "  -d, --destination DEST     Destination device specifier (required)"
     echo "  -h, --help                 Show this help message"
@@ -22,8 +22,8 @@ usage() {
     echo "Environment variables:"
     echo "  OTHER_XCODE_ARGS           Additional arguments to pass to xcodebuild"
     echo "  XCODE_ACTION               Action to perform"
+    echo "  XCODE_BUILD_PATH           Build products path"
     echo "  XCODE_CONFIG               Build configuration"
-    echo "  XCODE_DERIVED_DATA         Derived data path"
     echo "  XCODE_DESTINATION          Destination device specifier"
     echo "  XCODE_PROJECT              Xcode project path"
     echo "  XCODE_SCHEME               Scheme name"
@@ -41,7 +41,7 @@ parse_args() {
                 shift 2
                 ;;
             -b|--build-path)
-                DERIVED_DATA="$2"
+                BUILD_PATH="$2"
                 shift 2
                 ;;
             -c|--config)
@@ -77,7 +77,7 @@ parse_args() {
     # Set values from environment variables if not set by command line
     ACTION="${ACTION:-$XCODE_ACTION}"
     CONFIG="${CONFIG:-$XCODE_CONFIG}"
-    DERIVED_DATA="${DERIVED_DATA:-$XCODE_DERIVED_DATA}"
+    BUILD_PATH="${BUILD_PATH:-$XCODE_BUILD_PATH}"
     DESTINATION="${DESTINATION:-$XCODE_DESTINATION}"
     PROJECT="${PROJECT:-$XCODE_PROJECT}"
     SCHEME="${SCHEME:-$XCODE_SCHEME}"
@@ -88,9 +88,9 @@ parse_args() {
         CONFIG="Debug"
     fi
 
-    # If derived data path is still empty, set it to the default value
-    if [ -z "$DERIVED_DATA" ]; then
-        DERIVED_DATA=".build"
+    # If build path is still empty, set it to the default value
+    if [ -z "$BUILD_PATH" ]; then
+        BUILD_PATH=".build"
     fi
 
     # Validate required parameters
@@ -121,7 +121,13 @@ case "$ACTION" in
 esac
 
 # Create result bundle path
-RESULT_BUNDLE="${DERIVED_DATA}/${SCHEME}_${ACTION}.xcresult"
+RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
+
+# Create directories if they don't exist
+DERIVED_DATA_PATH="$BUILD_PATH/DerivedData"
+PACKAGE_CACHE_PATH="$BUILD_PATH/SwiftPM"
+mkdir -p "$BUILD_PATH" "$DERIVED_DATA_PATH" "$PACKAGE_CACHE_PATH"
+PACKAGE_CACHE_PATH=$(realpath "$PACKAGE_CACHE_PATH")
 
 # Command construction
 XCODE_CMD="xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
@@ -133,7 +139,9 @@ fi
 
 # Add common arguments
 XCODE_CMD="$XCODE_CMD -scheme '$SCHEME' -destination '$DESTINATION'"
-XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA' -resultBundlePath '$RESULT_BUNDLE'"
+XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
+XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA_PATH'"
+XCODE_CMD="$XCODE_CMD -packageCachePath '$PACKAGE_CACHE_PATH'"
 XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
 XCODE_CMD="$XCODE_CMD $OTHER_XCODE_ARGS"
 
@@ -146,14 +154,11 @@ fi
 echo "Executing xcodebuild command:"
 echo "$XCODE_CMD"
 
-# Create build directory if it doesn't exist
-mkdir -p "$DERIVED_DATA"
-
 # Remove existing result bundle if it exists
 rm -r "$RESULT_BUNDLE" 2>/dev/null || true
 
 # Construct pipe chain
-LOG_FILE="${DERIVED_DATA}/${SCHEME}_${ACTION}.log"
+LOG_FILE="${BUILD_PATH}/${SCHEME}_${ACTION}.log"
 PIPE_CMD="$XCODE_CMD 2>&1 | tee '${LOG_FILE}'"
 
 # Add xcbeautify to pipe chain if available
@@ -172,4 +177,4 @@ else
     echo "Command failed with status $CMD_STATUS"
 fi
 echo "Log file: ${LOG_FILE}"
-exit $CMD_STATUS 
+exit $CMD_STATUS
