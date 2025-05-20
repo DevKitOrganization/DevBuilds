@@ -149,17 +149,10 @@ archive_app() {
     local archive_path="$1"
     local log_file="$2"
 
-    # Create directories if they don’t exist
-    local derived_data_path="$BUILD_PATH/DerivedData"
-    local package_cache_path="$BUILD_PATH/SwiftPM"
-    mkdir -p "$BUILD_PATH" "$derived_data_path" "$package_cache_path"
-    package_cache_path=$(realpath "$package_cache_path")
-
     # Command construction
     local xcode_cmd="xcodebuild archive -project '$PROJECT' -scheme '$SCHEME'"
     xcode_cmd="$xcode_cmd -destination '$DESTINATION'"
-    xcode_cmd="$xcode_cmd -derivedDataPath '$derived_data_path'"
-    xcode_cmd="$xcode_cmd -packageCachePath '$package_cache_path'"
+    xcode_cmd="$xcode_cmd -derivedDataPath '$BUILD_PATH/DerivedData'"
     xcode_cmd="$xcode_cmd -archivePath '$archive_path' -configuration '$CONFIG'"
     xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
     xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
@@ -194,21 +187,21 @@ export_app() {
 
     echo "Exporting archive..."
 
-    local export_cmd="xcodebuild -exportArchive"
-    export_cmd="$export_cmd -archivePath '$archive_path'"
-    export_cmd="$export_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
-    export_cmd="$export_cmd -exportPath '$archive_path/Products'"
-    export_cmd="$export_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
-    export_cmd="$export_cmd -authenticationKeyID '$AUTH_KEY_ID'"
-    export_cmd="$export_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
-    export_cmd="$export_cmd $OTHER_EXPORT_FLAGS"
+    local xcode_cmd="xcodebuild -exportArchive"
+    xcode_cmd="$xcode_cmd -archivePath '$archive_path'"
+    xcode_cmd="$xcode_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
+    xcode_cmd="$xcode_cmd -exportPath '$archive_path/Products'"
+    xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
+    xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
+    xcode_cmd="$xcode_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
+    xcode_cmd="$xcode_cmd $OTHER_EXPORT_FLAGS"
 
     # Execute export command
     echo "Executing export command:"
-    echo "$export_cmd"
+    echo "$xcode_cmd"
 
     # Construct pipe chain
-    local export_pipe_cmd="$export_cmd 2>&1 | tee -a '$log_file'"
+    local export_pipe_cmd="$xcode_cmd 2>&1 | tee -a '$log_file'"
 
     # Execute pipe chain
     eval "$export_pipe_cmd"

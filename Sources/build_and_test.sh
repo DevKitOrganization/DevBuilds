@@ -123,12 +123,6 @@ esac
 # Create result bundle path
 RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
 
-# Create directories if they don't exist
-DERIVED_DATA_PATH="$BUILD_PATH/DerivedData"
-PACKAGE_CACHE_PATH="$BUILD_PATH/SwiftPM"
-mkdir -p "$BUILD_PATH" "$DERIVED_DATA_PATH" "$PACKAGE_CACHE_PATH"
-PACKAGE_CACHE_PATH=$(realpath "$PACKAGE_CACHE_PATH")
-
 # Command construction
 XCODE_CMD="xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
 
@@ -140,8 +134,7 @@ fi
 # Add common arguments
 XCODE_CMD="$XCODE_CMD -scheme '$SCHEME' -destination '$DESTINATION'"
 XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
-XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA_PATH'"
-XCODE_CMD="$XCODE_CMD -packageCachePath '$PACKAGE_CACHE_PATH'"
+XCODE_CMD="$XCODE_CMD -derivedDataPath '$BUILD_PATH/DerivedData'"
 XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
 XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
 
