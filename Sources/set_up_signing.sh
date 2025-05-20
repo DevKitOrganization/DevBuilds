@@ -5,7 +5,6 @@
 
 # Enable pipefail to ensure we get the correct exit status from pipelines
 set -o pipefail
-set -x
 
 # Displays usage information and exits.
 usage() {
@@ -117,15 +116,26 @@ fi
 # Import the certificate into the Keychain
 echo "Importing certificate into Keychain..."
 security import "$CERTIFICATE_PATH" \
-    -A -t cert \
-    -f pkcs12 \
-    -P "$PASSWORD" \
     -k "$KEYCHAIN_PATH" \
-    -T /usr/bin/codesign
+    -P "$PASSWORD" \
+    -A \
+    -t cert \
+    -f pkcs12
 if [ $? -ne 0 ]; then
     echo "Error: Failed to import certificate into Keychain"
     exit 1
 fi
+
+security set-key-partition-list \
+    -S apple-tool:,apple: \
+    -k "$KEYCHAIN_PASSWORD" \
+    "$KEYCHAIN_PATH"
+if [ $? -ne 0 ]; then
+    echo "Error: Failed to set key partition for Keychain"
+    exit 1
+fi
+
+security list-keychain -d user -s "$KEYCHAIN_PATH"
 
 # Install the provisioning profiles
 echo "Installing provisioning profiles..."
@@ -133,6 +143,8 @@ mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
 
 for profile in "${PROFILES[@]}"; do
     PROFILE_PATH="$TEMP_DIR/profile_$(openssl rand -hex 4).mobileprovision"
+    echo "Installing profile $(basename $PROFILE_PATH)"
+
     echo "$profile" | base64 --decode --output "$PROFILE_PATH"
     if [ $? -ne 0 ]; then
         echo "Error: Failed to decode provisioning profile"
