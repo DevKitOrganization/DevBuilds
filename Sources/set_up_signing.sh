@@ -5,31 +5,71 @@
 
 # Enable pipefail to ensure we get the correct exit status from pipelines
 set -o pipefail
+set -x
 
 # Displays usage information and exits.
 usage() {
-    echo "Usage: $0"
-    echo ""
-    echo "This script requires the following environment variables to be set:"
-    echo "  DISTRIBUTION_CERTIFICATE_BASE64     Base64-encoded Apple Distribution certificate"
-    echo "  DISTRIBUTION_CERTIFICATE_PASSWORD   Password for the Apple Distribution certificate"
-    echo "  PROVISIONING_PROFILE_BASE64         Base64-encoded provisioning profile"
-    echo "  TEMP_DIR                            Directory for temporary files"
+    echo "Usage: $0 [options]"
+    echo "Options:"
+    echo "  --certificate     Base64-encoded Apple Distribution certificate"
+    echo "  --password        Password for the Apple Distribution certificate"
+    echo "  --profiles        One or more Base64-encoded provisioning profiles"
+    echo "  --temp-dir        Directory for temporary files"
     exit 1
 }
 
-# Check if required environment variables are set
-if [ -z "$DISTRIBUTION_CERTIFICATE_BASE64" ]; then 
-    echo "Error: Missing required environment variable DISTRIBUTION_CERTIFICATE_BASE64"
+# Parse command line arguments
+CERTIFICATE=""
+PASSWORD=""
+PROFILES=()
+TEMP_DIR=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --certificate)
+            CERTIFICATE="$2"
+            shift 2
+            ;;
+        --password)
+            PASSWORD="$2"
+            shift 2
+            ;;
+        --profiles)
+            shift
+            while [[ $# -gt 0 && ! $1 =~ ^-- ]]; do
+                PROFILES+=("$1")
+                shift
+            done
+            ;;
+        --temp-dir)
+            TEMP_DIR="$2"
+            shift 2
+            ;;
+        *)
+            echo "Error: Unknown parameter: $1"
+            usage
+            ;;
+    esac
+done
+
+# Validate required parameters
+if [ -z "$CERTIFICATE" ]; then
+    echo "Error: Missing required parameter --certificate"
     usage
-elif [ -z "$DISTRIBUTION_CERTIFICATE_PASSWORD" ]; then
-    echo "Error: Missing required environment variable DISTRIBUTION_CERTIFICATE_PASSWORD"
+fi
+
+if [ -z "$PASSWORD" ]; then
+    echo "Error: Missing required parameter --password"
     usage
-elif [ -z "$PROVISIONING_PROFILE_BASE64" ]; then
-    echo "Error: Missing required environment variable PROVISIONING_PROFILE_BASE64"
+fi
+
+if [ ${#PROFILES[@]} -eq 0 ]; then
+    echo "Error: Missing required parameter --profiles"
     usage
-elif [ -z "$TEMP_DIR" ]; then
-    echo "Error: Missing required environment variable TEMP_DIR"
+fi
+
+if [ -z "$TEMP_DIR" ]; then
+    echo "Error: Missing required parameter --temp-dir"
     usage
 fi
 
@@ -38,26 +78,17 @@ mkdir -p "$TEMP_DIR"
 
 # Set up paths for temporary files
 CERTIFICATE_PATH="$TEMP_DIR/distribution.p12"
-PROVISIONING_PROFILE_PATH="$TEMP_DIR/profile.mobileprovision"
 KEYCHAIN_PATH="$TEMP_DIR/build.keychain"
 KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
 
 # Clean up any existing files
-rm -f "$CERTIFICATE_PATH" "$PROVISIONING_PROFILE_PATH" "$KEYCHAIN_PATH"
+rm -f "$CERTIFICATE_PATH" "$KEYCHAIN_PATH"
 
 # Decode and save the distribution certificate
 echo "Setting up distribution certificate..."
-echo "$DISTRIBUTION_CERTIFICATE_BASE64" | base64 --decode --output "$CERTIFICATE_PATH"
+echo "$CERTIFICATE" | base64 --decode --output "$CERTIFICATE_PATH"
 if [ $? -ne 0 ]; then
     echo "Error: Failed to decode distribution certificate"
-    exit 1
-fi
-
-# Decode and save the provisioning profile
-echo "Setting up provisioning profile..."
-echo "$PROVISIONING_PROFILE_BASE64" | base64 --decode --output "$PROVISIONING_PROFILE_PATH"
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to decode provisioning profile"
     exit 1
 fi
 
@@ -88,7 +119,7 @@ echo "Importing certificate into Keychain..."
 security import "$CERTIFICATE_PATH" \
     -A -t cert \
     -f pkcs12 \
-    -P "$DISTRIBUTION_CERTIFICATE_PASSWORD" \
+    -P "$PASSWORD" \
     -k "$KEYCHAIN_PATH" \
     -T /usr/bin/codesign
 if [ $? -ne 0 ]; then
@@ -96,11 +127,25 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Install the provisioning profile
-echo "Installing provisioning profile..."
+# Install the provisioning profiles
+echo "Installing provisioning profiles..."
 mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
-cp "$PROVISIONING_PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
-if [ $? -ne 0 ]; then
-    echo "Error: Failed to install provisioning profile"
-    exit 1
-fi
+
+for profile in "${PROFILES[@]}"; do
+    PROFILE_PATH="$TEMP_DIR/profile_$(openssl rand -hex 4).mobileprovision"
+    echo "$profile" | base64 --decode --output "$PROFILE_PATH"
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to decode provisioning profile"
+        exit 1
+    fi
+
+    cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to install provisioning profile"
+        exit 1
+    fi
+
+    rm -f "$PROFILE_PATH"
+done
+
+echo "Code signing setup completed successfully"
