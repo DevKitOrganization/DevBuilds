@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ###
-# This script archives an Xcode project and uploads it to TestFlight.
+# This script archives an Xcode project and exports it.
 
 set -o pipefail
 
@@ -25,8 +25,8 @@ usage() {
     echo "  APP_STORE_CONNECT_API_ISSUER_ID     App Store Connect API Issuer"
     echo "  APP_STORE_CONNECT_API_KEY_ID        App Store Connect API Key"
     echo "  APP_STORE_CONNECT_API_KEY_PATH      Path to App Store Connect API key"
-    echo "  OTHER_ARCHIVE_ARGS                  Additional args to pass to the archive command"
-    echo "  OTHER_EXPORT_ARGS                   Additional args to pass to the export command"
+    echo "  OTHER_ARCHIVE_FLAGS                 Additional flags to pass to the archive command"
+    echo "  OTHER_EXPORT_FLAGS                  Additional flags to pass to the export command"
     echo "  XCODE_BUILD_PATH                    Build products path"
     echo "  XCODE_CONFIG                        Build configuration"
     echo "  XCODE_EXPORT_OPTIONS_PLIST          Path to export options plist"
@@ -40,29 +40,6 @@ usage() {
 get_destination() {
     local platform="$1"
     echo "generic/platform=$platform"
-}
-
-# Gets altool type from platform
-get_altool_type() {
-    local platform="$1"
-    case "$platform" in
-        iOS)
-            echo "ios"
-            ;;
-        macOS)
-            echo "macos"
-            ;;
-        tvOS)
-            echo "appletvos"
-            ;;
-        visionOS)
-            echo "visionos"
-            ;;
-        *)
-            echo "Error: Unsupported platform: $platform. Supported platforms: iOS, macOS, tvOS, visionOS"
-            exit 1
-            ;;
-    esac
 }
 
 # Parses arguments and validates parameters.
@@ -142,8 +119,7 @@ parse_args() {
         PLATFORM="iOS"
     fi
 
-    # Get altool type and destination from platform
-    APP_TYPE="$(get_altool_type "$PLATFORM")"
+    # Get destination from platform
     DESTINATION="$(get_destination "$PLATFORM")"
 
     # Validate required parameters
@@ -173,8 +149,6 @@ archive_app() {
     local archive_path="$1"
     local log_file="$2"
 
-    local api_key_path="$AUTH_KEY_PATH/AuthKey_${AUTH_KEY_ID}.p8"
-
     # Create directories if they don’t exist
     local derived_data_path="$BUILD_PATH/DerivedData"
     local package_cache_path="$BUILD_PATH/SwiftPM"
@@ -187,9 +161,10 @@ archive_app() {
     xcode_cmd="$xcode_cmd -derivedDataPath '$derived_data_path'"
     xcode_cmd="$xcode_cmd -packageCachePath '$package_cache_path'"
     xcode_cmd="$xcode_cmd -archivePath '$archive_path' -configuration '$CONFIG'"
-    xcode_cmd="$xcode_cmd -authenticationKeyPath '$api_key_path' -authenticationKeyID '$AUTH_KEY_ID'"
+    xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
+    xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
     xcode_cmd="$xcode_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
-    xcode_cmd="$xcode_cmd $OTHER_ARCHIVE_ARGS"
+    xcode_cmd="$xcode_cmd $OTHER_ARCHIVE_FLAGS"
 
     # Execute command
     echo "Executing archive command:"
@@ -209,65 +184,36 @@ archive_app() {
     # Execute pipe chain
     eval "$pipe_cmd"
     local archive_status=$?
-
-    # If archive succeeded, export the archive
-    if [ $archive_status -eq 0 ]; then
-        echo "Exporting archive..."
-
-        local export_cmd="xcodebuild -exportArchive"
-        export_cmd="$export_cmd -archivePath '$archive_path'"
-        export_cmd="$export_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
-        export_cmd="$export_cmd -exportPath '$archive_path/Products'"
-        export_cmd="$export_cmd -authenticationKeyPath '$api_key_path' -authenticationKeyID '$AUTH_KEY_ID'"
-        export_cmd="$export_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
-        export_cmd="$export_cmd $OTHER_EXPORT_ARGS"
-
-        # Execute export command
-        echo "Executing export command:"
-        echo "$export_cmd"
-
-        # Construct pipe chain
-        local export_pipe_cmd="$export_cmd 2>&1 | tee -a '$log_file'"
-
-        # Execute pipe chain
-        eval "$export_pipe_cmd"
-        local export_status=$?
-        return $export_status
-    fi
-
     return $archive_status
 }
 
-# Uploads archive to TestFlight.
-upload_to_testflight() {
+# Export the archive.
+export_app() {
     local archive_path="$1"
     local log_file="$2"
 
-    # Find the IPA file
-    local ipa_path=$(find "$archive_path/Products" -name "*.ipa" -print -quit)
-    if [ -z "$ipa_path" ]; then
-        echo "Error: No IPA file found in $archive_path/Products"
-        return 1
-    fi
+    echo "Exporting archive..."
 
-    # Ideally we would do this with --upload-package, --upload-app is easier to use
-    echo "Uploading to TestFlight..."
-    local upload_cmd="xcrun altool --upload-app --type '$APP_TYPE' --file '$ipa_path'"
-    upload_cmd="$upload_cmd --apiKey '$AUTH_KEY_ID'"
-    upload_cmd="$upload_cmd --apiIssuer '$AUTH_KEY_ISSUER'"
-    upload_cmd="$upload_cmd -API_PRIVATE_KEYS_DIR '$AUTH_KEY_PATH'"
+    local export_cmd="xcodebuild -exportArchive"
+    export_cmd="$export_cmd -archivePath '$archive_path'"
+    export_cmd="$export_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
+    export_cmd="$export_cmd -exportPath '$archive_path/Products'"
+    export_cmd="$export_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
+    export_cmd="$export_cmd -authenticationKeyID '$AUTH_KEY_ID'"
+    export_cmd="$export_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
+    export_cmd="$export_cmd $OTHER_EXPORT_FLAGS"
 
-    # Execute command with logging
-    echo "Executing upload command:"
-    echo "$upload_cmd"
+    # Execute export command
+    echo "Executing export command:"
+    echo "$export_cmd"
 
     # Construct pipe chain
-    local pipe_cmd="$upload_cmd 2>&1 | tee '$log_file'"
+    local export_pipe_cmd="$export_cmd 2>&1 | tee -a '$log_file'"
 
     # Execute pipe chain
-    eval "$pipe_cmd"
-    local upload_status=$?
-    return $upload_status
+    eval "$export_pipe_cmd"
+    local export_status=$?
+    return $export_status
 }
 
 # Parse and validate arguments
@@ -276,25 +222,25 @@ parse_args "$@"
 # Create paths
 ARCHIVE_PATH="${BUILD_PATH}/${SCHEME}.xcarchive"
 ARCHIVE_LOG="${BUILD_PATH}/${SCHEME}_archive.log"
-UPLOAD_LOG="${BUILD_PATH}/${SCHEME}_upload.log"
+EXPORT_LOG="${BUILD_PATH}/${SCHEME}_export.log"
 
 # Archive the app
 archive_app "$ARCHIVE_PATH" "$ARCHIVE_LOG"
 ARCHIVE_STATUS=$?
 
-# Report archive status and upload if successful
+# If archive succeeded, export the archive
 if [ $ARCHIVE_STATUS -eq 0 ]; then
     echo "Archive completed successfully"
 
-    # Upload to TestFlight
-    upload_to_testflight "$ARCHIVE_PATH" "$UPLOAD_LOG"
-    UPLOAD_STATUS=$?
+    # Export the archive
+    export_app "$ARCHIVE_PATH" "$EXPORT_LOG"
+    EXPORT_STATUS=$?
 
-    if [ $UPLOAD_STATUS -eq 0 ]; then
-        echo "Upload to TestFlight completed successfully"
+    if [ $EXPORT_STATUS -eq 0 ]; then
+        echo "Export completed successfully"
     else
-        echo "Upload to TestFlight failed"
-        exit $UPLOAD_STATUS
+        echo "Export failed"
+        exit $EXPORT_STATUS
     fi
 else
     echo "Archive failed"
@@ -302,5 +248,5 @@ else
 fi
 
 echo "Archive log: ${ARCHIVE_LOG}"
-echo "Upload log: ${UPLOAD_LOG}"
+echo "Export log: ${EXPORT_LOG}"
 exit 0

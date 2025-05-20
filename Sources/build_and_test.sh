@@ -20,7 +20,7 @@ usage() {
     echo "  -t, --test-plan PLAN       Test plan to use (required for test actions)"
     echo ""
     echo "Environment variables:"
-    echo "  OTHER_XCODE_ARGS           Additional arguments to pass to xcodebuild"
+    echo "  OTHER_XCODE_FLAGS          Additional flags to pass to xcodebuild"
     echo "  XCODE_ACTION               Action to perform"
     echo "  XCODE_BUILD_PATH           Build products path"
     echo "  XCODE_CONFIG               Build configuration"
@@ -143,7 +143,7 @@ XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
 XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA_PATH'"
 XCODE_CMD="$XCODE_CMD -packageCachePath '$PACKAGE_CACHE_PATH'"
 XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
-XCODE_CMD="$XCODE_CMD $OTHER_XCODE_ARGS"
+XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
 
 # Add test plan if specified and action is test
 if [ -n "$TEST_PLAN" ] && [ "$ACTION" = "test" ]; then
