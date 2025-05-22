@@ -14,6 +14,7 @@ usage() {
     echo "  -b, --build-path PATH      Build products path (default: .build)"
     echo "  -c, --config CONFIG        Build configuration (default: Debug)"
     echo "  -d, --destination DEST     Destination device specifier (required)"
+    echo "  --disable-xcbeautify       Disables use of xcbeautify"
     echo "  -h, --help                 Show this help message"
     echo "  -p, --project PROJECT      Xcode project path (required)"
     echo "  -s, --scheme SCHEME        Scheme name (required)"
@@ -52,6 +53,10 @@ parse_args() {
                 DESTINATION="$2"
                 shift 2
                 ;;
+            --disable-xcbeautify)
+                DISABLE_XCBEAUTIFY="true"
+                shift
+                ;;
             -h|--help)
                 usage
                 ;;
@@ -83,14 +88,19 @@ parse_args() {
     SCHEME="${SCHEME:-$XCODE_SCHEME}"
     TEST_PLAN="${TEST_PLAN:-$XCODE_TEST_PLAN}"
 
+    # If build path is still empty, set it to the default value
+    if [ -z "$BUILD_PATH" ]; then
+        BUILD_PATH=".build"
+    fi
+
     # If config is still empty, set it to the default value
     if [ -z "$CONFIG" ]; then
         CONFIG="Debug"
     fi
 
-    # If build path is still empty, set it to the default value
-    if [ -z "$BUILD_PATH" ]; then
-        BUILD_PATH=".build"
+    # If disabled xcbeautify is empty, set it to the default value
+    if [ -z "$DISABLE_XCBEAUTIFY" ]; then
+        DISABLE_XCBEAUTIFY="false"
     fi
 
     # Validate required parameters
@@ -119,6 +129,8 @@ case "$ACTION" in
         exit 1
         ;;
 esac
+
+mkdir -p "$BUILD_PATH"
 
 # Create result bundle path
 RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
@@ -152,11 +164,13 @@ rm -r "$RESULT_BUNDLE" 2>/dev/null || true
 
 # Construct pipe chain
 LOG_FILE="${BUILD_PATH}/${SCHEME}_${ACTION}.log"
-PIPE_CMD="$XCODE_CMD 2>&1 | tee '${LOG_FILE}'"
+PIPE_CMD="$XCODE_CMD 2>&1 | tee '$LOG_FILE'"
 
 # Add xcbeautify to pipe chain if available
-if command -v xcbeautify >/dev/null 2>&1; then
-    PIPE_CMD="$PIPE_CMD | xcbeautify"
+if [ "$DISABLE_XCBEAUTIFY" = "false" ]; then
+    if command -v xcbeautify >/dev/null 2>&1; then
+        PIPE_CMD="$PIPE_CMD | xcbeautify"
+    fi
 fi
 
 # Execute pipe chain
@@ -169,5 +183,5 @@ if [ $CMD_STATUS -eq 0 ]; then
 else
     echo "Command failed with status $CMD_STATUS"
 fi
-echo "Log file: ${LOG_FILE}"
+echo "Log file: $LOG_FILE"
 exit $CMD_STATUS

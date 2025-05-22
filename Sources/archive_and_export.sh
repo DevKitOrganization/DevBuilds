@@ -201,7 +201,7 @@ export_app() {
     echo "$xcode_cmd"
 
     # Construct pipe chain
-    local export_pipe_cmd="$xcode_cmd 2>&1 | tee -a '$log_file'"
+    local export_pipe_cmd="$xcode_cmd 2>&1 | tee '$log_file'"
 
     # Execute pipe chain
     eval "$export_pipe_cmd"
@@ -211,6 +211,8 @@ export_app() {
 
 # Parse and validate arguments
 parse_args "$@"
+
+mkdir -p "$BUILD_PATH"
 
 # Create paths
 ARCHIVE_PATH="${BUILD_PATH}/${SCHEME}.xcarchive"
