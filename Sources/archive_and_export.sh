@@ -27,6 +27,7 @@ usage() {
     echo "  APP_STORE_CONNECT_API_KEY_PATH      Path to App Store Connect API key"
     echo "  OTHER_ARCHIVE_FLAGS                 Additional flags to pass to the archive command"
     echo "  OTHER_EXPORT_FLAGS                  Additional flags to pass to the export command"
+    echo "  OTHER_XCBEAUTIFY_FLAGS              Additional flags to pass to xcbeautify"
     echo "  XCODE_BUILD_PATH                    Build products path"
     echo "  XCODE_CONFIG                        Build configuration"
     echo "  XCODE_EXPORT_OPTIONS_PLIST          Path to export options plist"
@@ -150,7 +151,8 @@ archive_app() {
     local log_file="$2"
 
     # Command construction
-    local xcode_cmd="xcodebuild archive -project '$PROJECT' -scheme '$SCHEME'"
+    local xcode_cmd="NSUnbufferedIO=YES xcodebuild archive"
+    xcode_cmd="$xcode_cmd -project '$PROJECT' -scheme '$SCHEME'"
     xcode_cmd="$xcode_cmd -destination '$DESTINATION'"
     xcode_cmd="$xcode_cmd -derivedDataPath '$BUILD_PATH/DerivedData'"
     xcode_cmd="$xcode_cmd -archivePath '$archive_path' -configuration '$CONFIG'"
@@ -171,7 +173,7 @@ archive_app() {
 
     # Add xcbeautify to pipe chain if available
     if command -v xcbeautify >/dev/null 2>&1; then
-        pipe_cmd="$pipe_cmd | xcbeautify"
+        pipe_cmd="$pipe_cmd | xcbeautify $OTHER_XCBEAUTIFY_FLAGS"
     fi
 
     # Execute pipe chain
@@ -187,7 +189,7 @@ export_app() {
 
     echo "Exporting archive..."
 
-    local xcode_cmd="xcodebuild -exportArchive"
+    local xcode_cmd="NSUnbufferedIO=YES xcodebuild -exportArchive"
     xcode_cmd="$xcode_cmd -archivePath '$archive_path'"
     xcode_cmd="$xcode_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
     xcode_cmd="$xcode_cmd -exportPath '$archive_path/Products'"

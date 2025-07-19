@@ -22,6 +22,7 @@ usage() {
     echo ""
     echo "Environment variables:"
     echo "  OTHER_XCODE_FLAGS          Additional flags to pass to xcodebuild"
+    echo "  OTHER_XCBEAUTIFY_FLAGS     Additional flags to pass to xcbeautify"
     echo "  XCODE_ACTION               Action to perform"
     echo "  XCODE_BUILD_PATH           Build products path"
     echo "  XCODE_CONFIG               Build configuration"
@@ -136,7 +137,7 @@ mkdir -p "$BUILD_PATH"
 RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
 
 # Command construction
-XCODE_CMD="xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
+XCODE_CMD="NSUnbufferedIO=YES xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
 
 if [ -n "$PROJECT" ]; then
     # If project is specified, use project build
@@ -169,7 +170,7 @@ PIPE_CMD="$XCODE_CMD 2>&1 | tee '$LOG_FILE'"
 # Add xcbeautify to pipe chain if available
 if [ "$DISABLE_XCBEAUTIFY" = "false" ]; then
     if command -v xcbeautify >/dev/null 2>&1; then
-        PIPE_CMD="$PIPE_CMD | xcbeautify"
+        PIPE_CMD="$PIPE_CMD | xcbeautify $OTHER_XCBEAUTIFY_FLAGS"
     fi
 fi
 
