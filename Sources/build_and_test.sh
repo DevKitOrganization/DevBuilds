@@ -19,6 +19,7 @@ usage() {
     echo "  -p, --project PROJECT      Xcode project path (required)"
     echo "  -s, --scheme SCHEME        Scheme name (required)"
     echo "  -t, --test-plan PLAN       Test plan to use (required for test actions)"
+    echo "  --test-products-path PATH  Test products path for test-without-building"
     echo ""
     echo "Environment variables:"
     echo "  OTHER_XCODE_FLAGS          Additional flags to pass to xcodebuild"
@@ -30,6 +31,7 @@ usage() {
     echo "  XCODE_PROJECT              Xcode project path"
     echo "  XCODE_SCHEME               Scheme name"
     echo "  XCODE_TEST_PLAN            Test plan to use"
+    echo "  XCODE_TEST_PRODUCTS_PATH   Test products path"
     exit 1
 }
 
@@ -73,6 +75,10 @@ parse_args() {
                 TEST_PLAN="$2"
                 shift 2
                 ;;
+            --test-products-path)
+                TEST_PRODUCTS_PATH="$2"
+                shift 2
+                ;;
             *)
                 echo "Unknown option: $1"
                 usage
@@ -88,6 +94,7 @@ parse_args() {
     PROJECT="${PROJECT:-$XCODE_PROJECT}"
     SCHEME="${SCHEME:-$XCODE_SCHEME}"
     TEST_PLAN="${TEST_PLAN:-$XCODE_TEST_PLAN}"
+    TEST_PRODUCTS_PATH="${TEST_PRODUCTS_PATH:-$XCODE_TEST_PRODUCTS_PATH}"
 
     # If build path is still empty, set it to the default value
     if [ -z "$BUILD_PATH" ]; then
@@ -139,21 +146,29 @@ RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
 # Command construction
 XCODE_CMD="NSUnbufferedIO=YES xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
 
-if [ -n "$PROJECT" ]; then
-    # If project is specified, use project build
-    XCODE_CMD="$XCODE_CMD -project '$PROJECT'"
+# Add standard parameters unless we're doing test-without-building with testProductsPath
+if [ "$ACTION" != "test-without-building" ] || [ -z "$TEST_PRODUCTS_PATH" ]; then
+    if [ -n "$PROJECT" ]; then
+        XCODE_CMD="$XCODE_CMD -project '$PROJECT'"
+    fi
+    XCODE_CMD="$XCODE_CMD -scheme '$SCHEME'"
+    XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
+    
+    # Add test plan if specified and action is test
+    if [ -n "$TEST_PLAN" ] && [ "$ACTION" = "test" ]; then
+        XCODE_CMD="$XCODE_CMD -testPlan '$TEST_PLAN'"
+    fi
 fi
 
-# Add common arguments
-XCODE_CMD="$XCODE_CMD -scheme '$SCHEME' -destination '$DESTINATION'"
+# Add common arguments (always included)
+XCODE_CMD="$XCODE_CMD -destination '$DESTINATION'"
 XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
 XCODE_CMD="$XCODE_CMD -derivedDataPath '$BUILD_PATH/DerivedData'"
-XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
 XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
 
-# Add test plan if specified and action is test
-if [ -n "$TEST_PLAN" ] && [ "$ACTION" = "test" ]; then
-    XCODE_CMD="$XCODE_CMD -testPlan '$TEST_PLAN'"
+# Add test products path if specified
+if [ -n "$TEST_PRODUCTS_PATH" ]; then
+    XCODE_CMD="$XCODE_CMD -testProductsPath '$TEST_PRODUCTS_PATH'"
 fi
 
 # Execute command
