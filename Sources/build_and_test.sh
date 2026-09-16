@@ -9,29 +9,33 @@ set -o pipefail
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  -a, --action ACTION        Action to perform (default: build, options: build,"
-    echo "                             build-for-testing, test, test-without-building)"
-    echo "  -b, --build-path PATH      Build products path (default: .build)"
-    echo "  -c, --config CONFIG        Build configuration (default: Debug)"
-    echo "  -d, --destination DEST     Destination device specifier (required)"
-    echo "  --disable-xcbeautify       Disables use of xcbeautify"
-    echo "  -h, --help                 Show this help message"
-    echo "  -p, --project PROJECT      Xcode project path (required)"
-    echo "  -s, --scheme SCHEME        Scheme name (required)"
-    echo "  -t, --test-plan PLAN       Test plan to use (required for test actions)"
-    echo "  --test-products-path PATH  Test products path for test-without-building"
+    echo "  -a, --action ACTION          Action to perform (default: build, options: build,"
+    echo "                               build-for-testing, test, test-without-building)"
+    echo "  -b, --build-path PATH        Build products path (default: .build)"
+    echo "  -c, --config CONFIG          Build configuration (default: Debug)"
+    echo "  --derived-data-path PATH     DerivedData path (default: BUILD_PATH/DerivedData)"
+    echo "  -d, --destination DEST       Destination device specifier (required)"
+    echo "  --disable-xcbeautify         Disables use of xcbeautify"
+    echo "  -h, --help                   Show this help message"
+    echo "  -p, --project PROJECT        Xcode project path (required)"
+    echo "  -s, --scheme SCHEME          Scheme name (required)"
+    echo "  --source-packages-path PATH  Source packages checkout path (optional)"
+    echo "  -t, --test-plan PLAN         Test plan to use (required for test actions)"
+    echo "  --test-products-path PATH    Test products path for test-without-building"
     echo ""
     echo "Environment variables:"
-    echo "  OTHER_XCODE_FLAGS          Additional flags to pass to xcodebuild"
-    echo "  OTHER_XCBEAUTIFY_FLAGS     Additional flags to pass to xcbeautify"
-    echo "  XCODE_ACTION               Action to perform"
-    echo "  XCODE_BUILD_PATH           Build products path"
-    echo "  XCODE_CONFIG               Build configuration"
-    echo "  XCODE_DESTINATION          Destination device specifier"
-    echo "  XCODE_PROJECT              Xcode project path"
-    echo "  XCODE_SCHEME               Scheme name"
-    echo "  XCODE_TEST_PLAN            Test plan to use"
-    echo "  XCODE_TEST_PRODUCTS_PATH   Test products path"
+    echo "  OTHER_XCBEAUTIFY_FLAGS       Additional flags to pass to xcbeautify"
+    echo "  OTHER_XCODE_FLAGS            Additional flags to pass to xcodebuild"
+    echo "  XCODE_ACTION                 Action to perform"
+    echo "  XCODE_BUILD_PATH             Build products path"
+    echo "  XCODE_CONFIG                 Build configuration"
+    echo "  XCODE_DERIVED_DATA_PATH      DerivedData path"
+    echo "  XCODE_DESTINATION            Destination device specifier"
+    echo "  XCODE_PROJECT                Xcode project path"
+    echo "  XCODE_SCHEME                 Scheme name"
+    echo "  XCODE_SOURCE_PACKAGES_PATH   Source packages checkout path"
+    echo "  XCODE_TEST_PLAN              Test plan to use"
+    echo "  XCODE_TEST_PRODUCTS_PATH     Test products path"
     exit 1
 }
 
@@ -50,6 +54,10 @@ parse_args() {
                 ;;
             -c|--config)
                 CONFIG="$2"
+                shift 2
+                ;;
+            --derived-data-path)
+                DERIVED_DATA_PATH="$2"
                 shift 2
                 ;;
             -d|--destination)
@@ -71,6 +79,10 @@ parse_args() {
                 SCHEME="$2"
                 shift 2
                 ;;
+            --source-packages-path)
+                SOURCE_PACKAGES_PATH="$2"
+                shift 2
+                ;;
             -t|--test-plan)
                 TEST_PLAN="$2"
                 shift 2
@@ -88,17 +100,28 @@ parse_args() {
 
     # Set values from environment variables if not set by command line
     ACTION="${ACTION:-$XCODE_ACTION}"
-    CONFIG="${CONFIG:-$XCODE_CONFIG}"
     BUILD_PATH="${BUILD_PATH:-$XCODE_BUILD_PATH}"
+    CONFIG="${CONFIG:-$XCODE_CONFIG}"
+    if [[ -z "$DERIVED_DATA_PATH" ]]; then
+        DERIVED_DATA_PATH="${XCODE_DERIVED_DATA_PATH:-}"
+    fi
     DESTINATION="${DESTINATION:-$XCODE_DESTINATION}"
     PROJECT="${PROJECT:-$XCODE_PROJECT}"
     SCHEME="${SCHEME:-$XCODE_SCHEME}"
+    if [[ -z "$SOURCE_PACKAGES_PATH" ]]; then
+        SOURCE_PACKAGES_PATH="${XCODE_SOURCE_PACKAGES_PATH:-}"
+    fi
     TEST_PLAN="${TEST_PLAN:-$XCODE_TEST_PLAN}"
     TEST_PRODUCTS_PATH="${TEST_PRODUCTS_PATH:-$XCODE_TEST_PRODUCTS_PATH}"
 
     # If build path is still empty, set it to the default value
     if [ -z "$BUILD_PATH" ]; then
         BUILD_PATH=".build"
+    fi
+
+    # Keep the default DerivedData directory relative to the resolved build output path.
+    if [[ -z "$DERIVED_DATA_PATH" ]]; then
+        DERIVED_DATA_PATH="$BUILD_PATH/DerivedData"
     fi
 
     # If config is still empty, set it to the default value
@@ -163,13 +186,20 @@ fi
 # Add common arguments (always included)
 XCODE_CMD="$XCODE_CMD -destination '$DESTINATION'"
 XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
-XCODE_CMD="$XCODE_CMD -derivedDataPath '$BUILD_PATH/DerivedData'"
-XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
+XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA_PATH'"
+
+# Add source packages checkout path if specified
+if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
+    XCODE_CMD="$XCODE_CMD -clonedSourcePackagesDirPath '$SOURCE_PACKAGES_PATH'"
+fi
 
 # Add test products path if specified
 if [ -n "$TEST_PRODUCTS_PATH" ]; then
     XCODE_CMD="$XCODE_CMD -testProductsPath '$TEST_PRODUCTS_PATH'"
 fi
+
+# Add caller-supplied flags last so they follow all generated arguments
+XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
 
 # Execute command
 echo "Executing xcodebuild command:"
