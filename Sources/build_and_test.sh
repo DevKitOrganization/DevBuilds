@@ -147,6 +147,15 @@ parse_args() {
     fi
 }
 
+# Print safely quoted extra arguments; return failure for malformed or unsupported syntax.
+parse_extra_flags() {
+    local extra_flags="$1"
+    local script_directory
+    script_directory="$(dirname "$0")"
+
+    "$script_directory/split_shell_words.py" "$extra_flags"
+}
+
 # Parse and validate arguments
 parse_args "$@"
 
@@ -160,6 +169,14 @@ case "$ACTION" in
         exit 1
         ;;
 esac
+
+# Parse extra flags before creating build output or starting Xcode.
+if ! OTHER_XCBEAUTIFY_FLAGS="$(parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}")"; then
+    exit 1
+fi
+if ! OTHER_XCODE_FLAGS="$(parse_extra_flags "${OTHER_XCODE_FLAGS:-}")"; then
+    exit 1
+fi
 
 mkdir -p "$BUILD_PATH"
 

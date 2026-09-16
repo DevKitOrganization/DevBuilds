@@ -240,8 +240,28 @@ export_app() {
     return $export_status
 }
 
+# Print safely quoted extra arguments; return failure for malformed or unsupported syntax.
+parse_extra_flags() {
+    local extra_flags="$1"
+    local script_directory
+    script_directory="$(dirname "$0")"
+
+    "$script_directory/split_shell_words.py" "$extra_flags"
+}
+
 # Parse and validate arguments
 parse_args "$@"
+
+# Parse extra flags before creating build output or starting either Xcode phase.
+if ! OTHER_ARCHIVE_FLAGS="$(parse_extra_flags "${OTHER_ARCHIVE_FLAGS:-}")"; then
+    exit 1
+fi
+if ! OTHER_EXPORT_FLAGS="$(parse_extra_flags "${OTHER_EXPORT_FLAGS:-}")"; then
+    exit 1
+fi
+if ! OTHER_XCBEAUTIFY_FLAGS="$(parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}")"; then
+    exit 1
+fi
 
 mkdir -p "$BUILD_PATH"
 
