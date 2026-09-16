@@ -9,31 +9,35 @@ set -o pipefail
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --auth-key-path PATH                Path to App Store Connect API key (required)"
-    echo "  --auth-key-id ID                    App Store Connect API Key ID (required)"
-    echo "  --auth-key-issuer-id ID             App Store Connect API Issuer ID (required)"
-    echo "  -b, --build-path PATH               Build products path (default: .build)"
-    echo "  -c, --config CONFIG                 Build configuration (default: Release)"
-    echo "  -e, --export-options-plist PATH     Path to export options plist (required)"
-    echo "  -h, --help                          Show this help message"
-    echo "  -p, --project PROJECT               Xcode project path (required)"
-    echo "  --platform PLATFORM                 Platform (default: iOS, options: iOS, macOS,"
-    echo "                                      tvOS, visionOS)"
-    echo "  -s, --scheme SCHEME                 Scheme name (required)"
+    echo "  --auth-key-id ID                   App Store Connect API Key ID (required)"
+    echo "  --auth-key-issuer-id ID            App Store Connect API Issuer ID (required)"
+    echo "  --auth-key-path PATH               Path to App Store Connect API key (required)"
+    echo "  -b, --build-path PATH              Build products path (default: .build)"
+    echo "  -c, --config CONFIG                Build configuration (default: Release)"
+    echo "  --derived-data-path PATH           DerivedData path (default: BUILD_PATH/DerivedData)"
+    echo "  -e, --export-options-plist PATH    Path to export options plist (required)"
+    echo "  -h, --help                         Show this help message"
+    echo "  --platform PLATFORM                Platform (default: iOS, options: iOS, macOS,"
+    echo "                                     tvOS, visionOS)"
+    echo "  -p, --project PROJECT              Xcode project path (required)"
+    echo "  -s, --scheme SCHEME                Scheme name (required)"
+    echo "  --source-packages-path PATH        Source packages checkout path (optional)"
     echo ""
     echo "Environment variables:"
-    echo "  APP_STORE_CONNECT_API_ISSUER_ID     App Store Connect API Issuer"
-    echo "  APP_STORE_CONNECT_API_KEY_ID        App Store Connect API Key"
-    echo "  APP_STORE_CONNECT_API_KEY_PATH      Path to App Store Connect API key"
-    echo "  OTHER_ARCHIVE_FLAGS                 Additional flags to pass to the archive command"
-    echo "  OTHER_EXPORT_FLAGS                  Additional flags to pass to the export command"
-    echo "  OTHER_XCBEAUTIFY_FLAGS              Additional flags to pass to xcbeautify"
-    echo "  XCODE_BUILD_PATH                    Build products path"
-    echo "  XCODE_CONFIG                        Build configuration"
-    echo "  XCODE_EXPORT_OPTIONS_PLIST          Path to export options plist"
-    echo "  XCODE_PLATFORM                      Platform"
-    echo "  XCODE_PROJECT                       Xcode project path"
-    echo "  XCODE_SCHEME                        Scheme name"
+    echo "  APP_STORE_CONNECT_API_ISSUER_ID    App Store Connect API Issuer"
+    echo "  APP_STORE_CONNECT_API_KEY_ID       App Store Connect API Key"
+    echo "  APP_STORE_CONNECT_API_KEY_PATH     Path to App Store Connect API key"
+    echo "  OTHER_ARCHIVE_FLAGS                Additional flags to pass to the archive command"
+    echo "  OTHER_EXPORT_FLAGS                 Additional flags to pass to the export command"
+    echo "  OTHER_XCBEAUTIFY_FLAGS             Additional flags to pass to xcbeautify"
+    echo "  XCODE_BUILD_PATH                   Build products path"
+    echo "  XCODE_CONFIG                       Build configuration"
+    echo "  XCODE_DERIVED_DATA_PATH            DerivedData path"
+    echo "  XCODE_EXPORT_OPTIONS_PLIST         Path to export options plist"
+    echo "  XCODE_PLATFORM                     Platform"
+    echo "  XCODE_PROJECT                      Xcode project path"
+    echo "  XCODE_SCHEME                       Scheme name"
+    echo "  XCODE_SOURCE_PACKAGES_PATH         Source packages checkout path"
     exit 1
 }
 
@@ -48,16 +52,16 @@ parse_args() {
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            --auth-key-path)
-                AUTH_KEY_PATH="$2"
-                shift 2
-                ;;
             --auth-key-id)
                 AUTH_KEY_ID="$2"
                 shift 2
                 ;;
             --auth-key-issuer-id)
                 AUTH_KEY_ISSUER="$2"
+                shift 2
+                ;;
+            --auth-key-path)
+                AUTH_KEY_PATH="$2"
                 shift 2
                 ;;
             -b|--build-path)
@@ -68,6 +72,10 @@ parse_args() {
                 CONFIG="$2"
                 shift 2
                 ;;
+            --derived-data-path)
+                DERIVED_DATA_PATH="$2"
+                shift 2
+                ;;
             -e|--export-options-plist)
                 EXPORT_OPTIONS_PLIST="$2"
                 shift 2
@@ -75,16 +83,20 @@ parse_args() {
             -h|--help)
                 usage
                 ;;
-            -p|--project)
-                PROJECT="$2"
-                shift 2
-                ;;
             --platform)
                 PLATFORM="$2"
                 shift 2
                 ;;
+            -p|--project)
+                PROJECT="$2"
+                shift 2
+                ;;
             -s|--scheme)
                 SCHEME="$2"
+                shift 2
+                ;;
+            --source-packages-path)
+                SOURCE_PACKAGES_PATH="$2"
                 shift 2
                 ;;
             *)
@@ -95,15 +107,21 @@ parse_args() {
     done
 
     # Set values from environment variables if not set by command line
-    CONFIG="${CONFIG:-$XCODE_CONFIG}"
+    AUTH_KEY_ISSUER="${AUTH_KEY_ISSUER:-$APP_STORE_CONNECT_API_ISSUER_ID}"
+    AUTH_KEY_ID="${AUTH_KEY_ID:-$APP_STORE_CONNECT_API_KEY_ID}"
+    AUTH_KEY_PATH="${AUTH_KEY_PATH:-$APP_STORE_CONNECT_API_KEY_PATH}"
     BUILD_PATH="${BUILD_PATH:-$XCODE_BUILD_PATH}"
+    CONFIG="${CONFIG:-$XCODE_CONFIG}"
+    if [[ -z "$DERIVED_DATA_PATH" ]]; then
+        DERIVED_DATA_PATH="${XCODE_DERIVED_DATA_PATH:-}"
+    fi
     EXPORT_OPTIONS_PLIST="${EXPORT_OPTIONS_PLIST:-$XCODE_EXPORT_OPTIONS_PLIST}"
     PLATFORM="${PLATFORM:-$XCODE_PLATFORM}"
     PROJECT="${PROJECT:-$XCODE_PROJECT}"
     SCHEME="${SCHEME:-$XCODE_SCHEME}"
-    AUTH_KEY_ID="${AUTH_KEY_ID:-$APP_STORE_CONNECT_API_KEY_ID}"
-    AUTH_KEY_ISSUER="${AUTH_KEY_ISSUER:-$APP_STORE_CONNECT_API_ISSUER_ID}"
-    AUTH_KEY_PATH="${AUTH_KEY_PATH:-$APP_STORE_CONNECT_API_KEY_PATH}"
+    if [[ -z "$SOURCE_PACKAGES_PATH" ]]; then
+        SOURCE_PACKAGES_PATH="${XCODE_SOURCE_PACKAGES_PATH:-}"
+    fi
 
     # If config is still empty, set it to the default value
     if [ -z "$CONFIG" ]; then
@@ -113,6 +131,11 @@ parse_args() {
     # If build path is still empty, set it to the default value
     if [ -z "$BUILD_PATH" ]; then
         BUILD_PATH=".build"
+    fi
+
+    # Keep the default DerivedData directory relative to the resolved build output path.
+    if [[ -z "$DERIVED_DATA_PATH" ]]; then
+        DERIVED_DATA_PATH="$BUILD_PATH/DerivedData"
     fi
 
     # If platform is still empty, set it to the default value
@@ -154,11 +177,17 @@ archive_app() {
     local xcode_cmd="NSUnbufferedIO=YES xcodebuild archive"
     xcode_cmd="$xcode_cmd -project '$PROJECT' -scheme '$SCHEME'"
     xcode_cmd="$xcode_cmd -destination '$DESTINATION'"
-    xcode_cmd="$xcode_cmd -derivedDataPath '$BUILD_PATH/DerivedData'"
+    xcode_cmd="$xcode_cmd -derivedDataPath '$DERIVED_DATA_PATH'"
     xcode_cmd="$xcode_cmd -archivePath '$archive_path' -configuration '$CONFIG'"
     xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
     xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
     xcode_cmd="$xcode_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
+
+    # Add source packages checkout path if specified
+    if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
+        xcode_cmd="$xcode_cmd -clonedSourcePackagesDirPath '$SOURCE_PACKAGES_PATH'"
+    fi
+
     xcode_cmd="$xcode_cmd $OTHER_ARCHIVE_FLAGS"
 
     # Execute command
