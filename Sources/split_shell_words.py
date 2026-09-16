@@ -44,7 +44,7 @@ def prepare_flag_string(flag_string: str) -> str:
 
 
 def main() -> int:
-    """Print safely quoted arguments for the current shell helpers, or report invalid syntax."""
+    """Print NUL-delimited arguments for Bash arrays, or report invalid syntax."""
     if len(sys.argv) != 2:
         print("Expected one flag string", file=sys.stderr)
         return 1
@@ -56,9 +56,9 @@ def main() -> int:
         print("Invalid extra flags: {}".format(error), file=sys.stderr)
         return 1
 
-    # The helpers currently assemble shell command strings. Preserve each argument's boundaries
-    # when they append this output, including empty arguments and literal shell characters.
-    print(shlex.join(arguments))
+    # A delimiter after every argument distinguishes an empty argument from no arguments.
+    for argument in arguments:
+        sys.stdout.write(argument + "\0")
     return 0
 
 

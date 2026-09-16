@@ -173,42 +173,45 @@ archive_app() {
     local archive_path="$1"
     local log_file="$2"
 
-    # Command construction
-    local xcode_cmd="NSUnbufferedIO=YES xcodebuild archive"
-    xcode_cmd="$xcode_cmd -project '$PROJECT' -scheme '$SCHEME'"
-    xcode_cmd="$xcode_cmd -destination '$DESTINATION'"
-    xcode_cmd="$xcode_cmd -derivedDataPath '$DERIVED_DATA_PATH'"
-    xcode_cmd="$xcode_cmd -archivePath '$archive_path' -configuration '$CONFIG'"
-    xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
-    xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
-    xcode_cmd="$xcode_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
+    local xcode_cmd=(
+        xcodebuild archive
+        -project "$PROJECT"
+        -scheme "$SCHEME"
+        -destination "$DESTINATION"
+        -derivedDataPath "$DERIVED_DATA_PATH"
+        -archivePath "$archive_path"
+        -configuration "$CONFIG"
+        -authenticationKeyPath "$AUTH_KEY_PATH"
+        -authenticationKeyID "$AUTH_KEY_ID"
+        -authenticationKeyIssuerID "$AUTH_KEY_ISSUER"
+    )
+    local archive_status
 
     # Add source packages checkout path if specified
     if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
-        xcode_cmd="$xcode_cmd -clonedSourcePackagesDirPath '$SOURCE_PACKAGES_PATH'"
+        xcode_cmd+=(-clonedSourcePackagesDirPath "$SOURCE_PACKAGES_PATH")
     fi
 
-    xcode_cmd="$xcode_cmd $OTHER_ARCHIVE_FLAGS"
+    # Add caller-supplied flags last so they follow all generated arguments
+    xcode_cmd+=("${ARCHIVE_ARGUMENTS[@]}")
 
     # Execute command
     echo "Executing archive command:"
-    echo "$xcode_cmd"
+    echo "NSUnbufferedIO=YES ${xcode_cmd[*]}"
 
     # Remove existing archive if it exists
     rm -r "$archive_path" 2>/dev/null || true
 
-    # Construct pipe chain
-    local pipe_cmd="$xcode_cmd 2>&1 | tee '$log_file'"
-
-    # Add xcbeautify to pipe chain if available
+    # Execute directly so parameter values are arguments rather than shell source.
     if command -v xcbeautify >/dev/null 2>&1; then
-        pipe_cmd="$pipe_cmd | xcbeautify $OTHER_XCBEAUTIFY_FLAGS"
+        NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 |
+            tee "$log_file" |
+            xcbeautify "${XCBEAUTIFY_ARGUMENTS[@]}"
+    else
+        NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 | tee "$log_file"
     fi
-
-    # Execute pipe chain
-    eval "$pipe_cmd"
-    local archive_status=$?
-    return $archive_status
+    archive_status=$?
+    return "$archive_status"
 }
 
 # Export the archive.
@@ -218,50 +221,75 @@ export_app() {
 
     echo "Exporting archive..."
 
-    local xcode_cmd="NSUnbufferedIO=YES xcodebuild -exportArchive"
-    xcode_cmd="$xcode_cmd -archivePath '$archive_path'"
-    xcode_cmd="$xcode_cmd -exportOptionsPlist '$EXPORT_OPTIONS_PLIST'"
-    xcode_cmd="$xcode_cmd -exportPath '$archive_path/Products'"
-    xcode_cmd="$xcode_cmd -authenticationKeyPath '$AUTH_KEY_PATH'"
-    xcode_cmd="$xcode_cmd -authenticationKeyID '$AUTH_KEY_ID'"
-    xcode_cmd="$xcode_cmd -authenticationKeyIssuerID '$AUTH_KEY_ISSUER'"
-    xcode_cmd="$xcode_cmd $OTHER_EXPORT_FLAGS"
+    local xcode_cmd=(
+        xcodebuild -exportArchive
+        -archivePath "$archive_path"
+        -exportOptionsPlist "$EXPORT_OPTIONS_PLIST"
+        -exportPath "$archive_path/Products"
+        -authenticationKeyPath "$AUTH_KEY_PATH"
+        -authenticationKeyID "$AUTH_KEY_ID"
+        -authenticationKeyIssuerID "$AUTH_KEY_ISSUER"
+    )
+    local export_status
+
+    # Add caller-supplied flags last so they follow all generated arguments
+    xcode_cmd+=("${EXPORT_ARGUMENTS[@]}")
 
     # Execute export command
     echo "Executing export command:"
-    echo "$xcode_cmd"
+    echo "NSUnbufferedIO=YES ${xcode_cmd[*]}"
 
-    # Construct pipe chain
-    local export_pipe_cmd="$xcode_cmd 2>&1 | tee '$log_file'"
-
-    # Execute pipe chain
-    eval "$export_pipe_cmd"
-    local export_status=$?
-    return $export_status
+    NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 | tee "$log_file"
+    export_status=$?
+    return "$export_status"
 }
 
-# Print safely quoted extra arguments; return failure for malformed or unsupported syntax.
+# Parse extra arguments into PARSED_EXTRA_FLAGS, replacing its previous contents on success.
+# A private file preserves the parser's failure status; process substitution would hide it.
+# NUL delimiters preserve empty arguments and whitespace without interpreting shell syntax.
 parse_extra_flags() {
     local extra_flags="$1"
     local script_directory
-    script_directory="$(dirname "$0")"
+    local flags_file
+    local argument
 
-    "$script_directory/split_shell_words.py" "$extra_flags"
+    if ! script_directory="$(dirname "$0")"; then
+        return 1
+    fi
+    if ! flags_file="$(mktemp "${TMPDIR:-/tmp}/devbuilds-flags.XXXXXX")"; then
+        return 1
+    fi
+    if ! "$script_directory/split_shell_words.py" "$extra_flags" > "$flags_file"; then
+        rm -f "$flags_file"
+        return 1
+    fi
+
+    PARSED_EXTRA_FLAGS=()
+    while IFS= read -r -d '' argument; do
+        PARSED_EXTRA_FLAGS+=("$argument")
+    done < "$flags_file"
+
+    if ! rm -f "$flags_file"; then
+        return 1
+    fi
 }
 
 # Parse and validate arguments
 parse_args "$@"
 
 # Parse extra flags before creating build output or starting either Xcode phase.
-if ! OTHER_ARCHIVE_FLAGS="$(parse_extra_flags "${OTHER_ARCHIVE_FLAGS:-}")"; then
+if ! parse_extra_flags "${OTHER_ARCHIVE_FLAGS:-}"; then
     exit 1
 fi
-if ! OTHER_EXPORT_FLAGS="$(parse_extra_flags "${OTHER_EXPORT_FLAGS:-}")"; then
+ARCHIVE_ARGUMENTS=("${PARSED_EXTRA_FLAGS[@]}")
+if ! parse_extra_flags "${OTHER_EXPORT_FLAGS:-}"; then
     exit 1
 fi
-if ! OTHER_XCBEAUTIFY_FLAGS="$(parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}")"; then
+EXPORT_ARGUMENTS=("${PARSED_EXTRA_FLAGS[@]}")
+if ! parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}"; then
     exit 1
 fi
+XCBEAUTIFY_ARGUMENTS=("${PARSED_EXTRA_FLAGS[@]}")
 
 mkdir -p "$BUILD_PATH"
 

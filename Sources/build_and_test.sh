@@ -147,13 +147,34 @@ parse_args() {
     fi
 }
 
-# Print safely quoted extra arguments; return failure for malformed or unsupported syntax.
+# Parse extra arguments into PARSED_EXTRA_FLAGS, replacing its previous contents on success.
+# A private file preserves the parser's failure status; process substitution would hide it.
+# NUL delimiters preserve empty arguments and whitespace without interpreting shell syntax.
 parse_extra_flags() {
     local extra_flags="$1"
     local script_directory
-    script_directory="$(dirname "$0")"
+    local flags_file
+    local argument
 
-    "$script_directory/split_shell_words.py" "$extra_flags"
+    if ! script_directory="$(dirname "$0")"; then
+        return 1
+    fi
+    if ! flags_file="$(mktemp "${TMPDIR:-/tmp}/devbuilds-flags.XXXXXX")"; then
+        return 1
+    fi
+    if ! "$script_directory/split_shell_words.py" "$extra_flags" > "$flags_file"; then
+        rm -f "$flags_file"
+        return 1
+    fi
+
+    PARSED_EXTRA_FLAGS=()
+    while IFS= read -r -d '' argument; do
+        PARSED_EXTRA_FLAGS+=("$argument")
+    done < "$flags_file"
+
+    if ! rm -f "$flags_file"; then
+        return 1
+    fi
 }
 
 # Parse and validate arguments
@@ -171,12 +192,14 @@ case "$ACTION" in
 esac
 
 # Parse extra flags before creating build output or starting Xcode.
-if ! OTHER_XCBEAUTIFY_FLAGS="$(parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}")"; then
+if ! parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}"; then
     exit 1
 fi
-if ! OTHER_XCODE_FLAGS="$(parse_extra_flags "${OTHER_XCODE_FLAGS:-}")"; then
+XCBEAUTIFY_ARGUMENTS=("${PARSED_EXTRA_FLAGS[@]}")
+if ! parse_extra_flags "${OTHER_XCODE_FLAGS:-}"; then
     exit 1
 fi
+XCODE_ARGUMENTS=("${PARSED_EXTRA_FLAGS[@]}")
 
 mkdir -p "$BUILD_PATH"
 
@@ -184,60 +207,61 @@ mkdir -p "$BUILD_PATH"
 RESULT_BUNDLE="${BUILD_PATH}/${SCHEME}_${ACTION}.xcresult"
 
 # Command construction
-XCODE_CMD="NSUnbufferedIO=YES xcodebuild $XCODE_ACTION -disableAutomaticPackageResolution"
+XCODE_CMD=(
+    xcodebuild "$XCODE_ACTION"
+    -disableAutomaticPackageResolution
+)
 
 # Add standard parameters unless we're doing test-without-building with testProductsPath
-if [ "$ACTION" != "test-without-building" ] || [ -z "$TEST_PRODUCTS_PATH" ]; then
-    if [ -n "$PROJECT" ]; then
-        XCODE_CMD="$XCODE_CMD -project '$PROJECT'"
+if [[ "$ACTION" != "test-without-building" || -z "$TEST_PRODUCTS_PATH" ]]; then
+    if [[ -n "$PROJECT" ]]; then
+        XCODE_CMD+=(-project "$PROJECT")
     fi
-    XCODE_CMD="$XCODE_CMD -scheme '$SCHEME'"
-    XCODE_CMD="$XCODE_CMD -configuration '$CONFIG'"
+    XCODE_CMD+=(-scheme "$SCHEME")
+    XCODE_CMD+=(-configuration "$CONFIG")
     
     # Add test plan if specified and action is test
-    if [ -n "$TEST_PLAN" ] && [ "$ACTION" = "test" ]; then
-        XCODE_CMD="$XCODE_CMD -testPlan '$TEST_PLAN'"
+    if [[ -n "$TEST_PLAN" && "$ACTION" == "test" ]]; then
+        XCODE_CMD+=(-testPlan "$TEST_PLAN")
     fi
 fi
 
 # Add common arguments (always included)
-XCODE_CMD="$XCODE_CMD -destination '$DESTINATION'"
-XCODE_CMD="$XCODE_CMD -resultBundlePath '$RESULT_BUNDLE'"
-XCODE_CMD="$XCODE_CMD -derivedDataPath '$DERIVED_DATA_PATH'"
+XCODE_CMD+=(
+    -destination "$DESTINATION"
+    -resultBundlePath "$RESULT_BUNDLE"
+    -derivedDataPath "$DERIVED_DATA_PATH"
+)
 
 # Add source packages checkout path if specified
 if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
-    XCODE_CMD="$XCODE_CMD -clonedSourcePackagesDirPath '$SOURCE_PACKAGES_PATH'"
+    XCODE_CMD+=(-clonedSourcePackagesDirPath "$SOURCE_PACKAGES_PATH")
 fi
 
 # Add test products path if specified
-if [ -n "$TEST_PRODUCTS_PATH" ]; then
-    XCODE_CMD="$XCODE_CMD -testProductsPath '$TEST_PRODUCTS_PATH'"
+if [[ -n "$TEST_PRODUCTS_PATH" ]]; then
+    XCODE_CMD+=(-testProductsPath "$TEST_PRODUCTS_PATH")
 fi
 
 # Add caller-supplied flags last so they follow all generated arguments
-XCODE_CMD="$XCODE_CMD $OTHER_XCODE_FLAGS"
+XCODE_CMD+=("${XCODE_ARGUMENTS[@]}")
 
 # Execute command
 echo "Executing xcodebuild command:"
-echo "$XCODE_CMD"
+echo "NSUnbufferedIO=YES ${XCODE_CMD[*]}"
 
 # Remove existing result bundle if it exists
 rm -r "$RESULT_BUNDLE" 2>/dev/null || true
 
-# Construct pipe chain
+# Execute the command directly, preserving argument boundaries through the log pipeline.
 LOG_FILE="${BUILD_PATH}/${SCHEME}_${ACTION}.log"
-PIPE_CMD="$XCODE_CMD 2>&1 | tee '$LOG_FILE'"
-
-# Add xcbeautify to pipe chain if available
-if [ "$DISABLE_XCBEAUTIFY" = "false" ]; then
-    if command -v xcbeautify >/dev/null 2>&1; then
-        PIPE_CMD="$PIPE_CMD | xcbeautify $OTHER_XCBEAUTIFY_FLAGS"
-    fi
+if [[ "$DISABLE_XCBEAUTIFY" == "false" ]] && command -v xcbeautify >/dev/null 2>&1; then
+    NSUnbufferedIO=YES "${XCODE_CMD[@]}" 2>&1 |
+        tee "$LOG_FILE" |
+        xcbeautify "${XCBEAUTIFY_ARGUMENTS[@]}"
+else
+    NSUnbufferedIO=YES "${XCODE_CMD[@]}" 2>&1 | tee "$LOG_FILE"
 fi
-
-# Execute pipe chain
-eval "$PIPE_CMD"
 CMD_STATUS=$?
 
 # Report status and exit
