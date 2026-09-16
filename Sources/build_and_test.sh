@@ -39,28 +39,55 @@ usage() {
     exit 1
 }
 
+# Check that a value-taking option has a nonempty value rather than another option.
+# Return nonzero with a diagnostic before the caller assigns values or shifts arguments.
+validate_option_value() {
+    local option="$1"
+    local value="$2"
+
+    if [[ -z "$value" || "$value" == -* ]]; then
+        printf 'Error: %s requires a nonempty value (not another option)\n' "$option" >&2
+        return 1
+    fi
+}
+
 # Parses arguments and validates parameters.
 parse_args() {
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             -a|--action)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 ACTION="$2"
                 shift 2
                 ;;
             -b|--build-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 BUILD_PATH="$2"
                 shift 2
                 ;;
             -c|--config)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 CONFIG="$2"
                 shift 2
                 ;;
             --derived-data-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 DERIVED_DATA_PATH="$2"
                 shift 2
                 ;;
             -d|--destination)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 DESTINATION="$2"
                 shift 2
                 ;;
@@ -72,22 +99,37 @@ parse_args() {
                 usage
                 ;;
             -p|--project)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 PROJECT="$2"
                 shift 2
                 ;;
             -s|--scheme)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 SCHEME="$2"
                 shift 2
                 ;;
             --source-packages-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 SOURCE_PACKAGES_PATH="$2"
                 shift 2
                 ;;
             -t|--test-plan)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 TEST_PLAN="$2"
                 shift 2
                 ;;
             --test-products-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 TEST_PRODUCTS_PATH="$2"
                 shift 2
                 ;;
@@ -145,6 +187,14 @@ parse_args() {
         echo "Error: Scheme is required"
         usage
     fi
+}
+
+# Print the Xcode invocation with Bash escaping to preserve visible argument boundaries.
+# This is a display operation; the command is executed separately using its argument array.
+log_xcode_command() {
+    printf 'NSUnbufferedIO=YES'
+    printf ' %q' "$@"
+    printf '\n'
 }
 
 # Parse extra arguments into PARSED_EXTRA_FLAGS, replacing its previous contents on success.
@@ -248,7 +298,7 @@ XCODE_CMD+=("${XCODE_ARGUMENTS[@]}")
 
 # Execute command
 echo "Executing xcodebuild command:"
-echo "NSUnbufferedIO=YES ${XCODE_CMD[*]}"
+log_xcode_command "${XCODE_CMD[@]}"
 
 # Remove existing result bundle if it exists
 rm -r "$RESULT_BUNDLE" 2>/dev/null || true

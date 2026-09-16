@@ -47,36 +47,69 @@ get_destination() {
     echo "generic/platform=$platform"
 }
 
+# Check that a value-taking option has a nonempty value rather than another option.
+# Return nonzero with a diagnostic before the caller assigns values or shifts arguments.
+validate_option_value() {
+    local option="$1"
+    local value="$2"
+
+    if [[ -z "$value" || "$value" == -* ]]; then
+        printf 'Error: %s requires a nonempty value (not another option)\n' "$option" >&2
+        return 1
+    fi
+}
+
 # Parses arguments and validates parameters.
 parse_args() {
     # Parse command line arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
             --auth-key-id)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 AUTH_KEY_ID="$2"
                 shift 2
                 ;;
             --auth-key-issuer-id)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 AUTH_KEY_ISSUER="$2"
                 shift 2
                 ;;
             --auth-key-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 AUTH_KEY_PATH="$2"
                 shift 2
                 ;;
             -b|--build-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 BUILD_PATH="$2"
                 shift 2
                 ;;
             -c|--config)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 CONFIG="$2"
                 shift 2
                 ;;
             --derived-data-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 DERIVED_DATA_PATH="$2"
                 shift 2
                 ;;
             -e|--export-options-plist)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 EXPORT_OPTIONS_PLIST="$2"
                 shift 2
                 ;;
@@ -84,18 +117,30 @@ parse_args() {
                 usage
                 ;;
             --platform)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 PLATFORM="$2"
                 shift 2
                 ;;
             -p|--project)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 PROJECT="$2"
                 shift 2
                 ;;
             -s|--scheme)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 SCHEME="$2"
                 shift 2
                 ;;
             --source-packages-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
                 SOURCE_PACKAGES_PATH="$2"
                 shift 2
                 ;;
@@ -197,7 +242,7 @@ archive_app() {
 
     # Execute command
     echo "Executing archive command:"
-    echo "NSUnbufferedIO=YES ${xcode_cmd[*]}"
+    log_xcode_command "${xcode_cmd[@]}"
 
     # Remove existing archive if it exists
     rm -r "$archive_path" 2>/dev/null || true
@@ -237,11 +282,19 @@ export_app() {
 
     # Execute export command
     echo "Executing export command:"
-    echo "NSUnbufferedIO=YES ${xcode_cmd[*]}"
+    log_xcode_command "${xcode_cmd[@]}"
 
     NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 | tee "$log_file"
     export_status=$?
     return "$export_status"
+}
+
+# Print the Xcode invocation with Bash escaping to preserve visible argument boundaries.
+# This is a display operation; the command is executed separately using its argument array.
+log_xcode_command() {
+    printf 'NSUnbufferedIO=YES'
+    printf ' %q' "$@"
+    printf '\n'
 }
 
 # Parse extra arguments into PARSED_EXTRA_FLAGS, replacing its previous contents on success.
