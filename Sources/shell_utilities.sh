@@ -2,6 +2,26 @@
 
 # Shared helpers for the build and archive entry points. Source this file; it runs no setup.
 
+# Return the first command's failure status, or the rightmost failure from the remaining commands.
+# Pass the captured PIPESTATUS elements in order; return zero when all commands succeed.
+check_pipeline_status() {
+    local first_command_status="$1"
+    local pipeline_status=0
+    local command_status
+
+    if [[ "$first_command_status" -ne 0 ]]; then
+        return "$first_command_status"
+    fi
+    shift
+
+    for command_status in "$@"; do
+        if [[ "$command_status" -ne 0 ]]; then
+            pipeline_status="$command_status"
+        fi
+    done
+    return "$pipeline_status"
+}
+
 # Print the Xcode invocation with Bash escaping to preserve visible argument boundaries.
 # This is a display operation; the command is executed separately using its argument array.
 log_xcode_command() {

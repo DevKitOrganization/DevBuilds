@@ -260,13 +260,17 @@ rm -r "$RESULT_BUNDLE" 2>/dev/null || true
 
 # Execute the command directly, preserving argument boundaries through the log pipeline.
 LOG_FILE="${BUILD_PATH}/${SCHEME}_${ACTION}.log"
+# Capture PIPESTATUS inside each branch before another command can overwrite it.
 if [[ "$DISABLE_XCBEAUTIFY" == "false" ]] && command -v xcbeautify >/dev/null 2>&1; then
     NSUnbufferedIO=YES "${XCODE_CMD[@]}" 2>&1 |
         tee "$LOG_FILE" |
         xcbeautify "${XCBEAUTIFY_ARGUMENTS[@]}"
+    PIPELINE_STATUSES=("${PIPESTATUS[@]}")
 else
     NSUnbufferedIO=YES "${XCODE_CMD[@]}" 2>&1 | tee "$LOG_FILE"
+    PIPELINE_STATUSES=("${PIPESTATUS[@]}")
 fi
+check_pipeline_status "${PIPELINE_STATUSES[@]}"
 CMD_STATUS=$?
 
 # Report status and exit

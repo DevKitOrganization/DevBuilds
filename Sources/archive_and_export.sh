@@ -224,6 +224,7 @@ archive_app() {
         -authenticationKeyIssuerID "$AUTH_KEY_ISSUER"
     )
     local archive_status
+    local pipeline_statuses
 
     # Add source packages checkout path if specified
     if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
@@ -241,13 +242,17 @@ archive_app() {
     rm -r "$archive_path" 2>/dev/null || true
 
     # Execute directly so parameter values are arguments rather than shell source.
+    # Capture PIPESTATUS inside each branch before another command can overwrite it.
     if command -v xcbeautify >/dev/null 2>&1; then
         NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 |
             tee "$log_file" |
             xcbeautify "${XCBEAUTIFY_ARGUMENTS[@]}"
+        pipeline_statuses=("${PIPESTATUS[@]}")
     else
         NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 | tee "$log_file"
+        pipeline_statuses=("${PIPESTATUS[@]}")
     fi
+    check_pipeline_status "${pipeline_statuses[@]}"
     archive_status=$?
     return "$archive_status"
 }
@@ -269,6 +274,7 @@ export_app() {
         -authenticationKeyIssuerID "$AUTH_KEY_ISSUER"
     )
     local export_status
+    local pipeline_statuses
 
     # Add caller-supplied flags last so they follow all generated arguments
     xcode_cmd+=("${EXPORT_ARGUMENTS[@]}")
@@ -278,6 +284,9 @@ export_app() {
     log_xcode_command "${xcode_cmd[@]}"
 
     NSUnbufferedIO=YES "${xcode_cmd[@]}" 2>&1 | tee "$log_file"
+    # Save all pipeline statuses before invoking the helper that chooses the exit status.
+    pipeline_statuses=("${PIPESTATUS[@]}")
+    check_pipeline_status "${pipeline_statuses[@]}"
     export_status=$?
     return "$export_status"
 }
