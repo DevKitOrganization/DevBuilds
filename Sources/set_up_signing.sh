@@ -10,23 +10,31 @@ set -o pipefail
 usage() {
     echo "Usage: $0 [options]"
     echo "Options:"
-    echo "  --certificate     Base64-encoded Apple Distribution certificate"
-    echo "  --password        Password for the Apple Distribution certificate"
-    echo "  --profiles        One or more Base64-encoded provisioning profiles"
-    echo "  --temp-dir        Directory for temporary files"
+    echo "  --certificate        Base64-encoded Apple Distribution certificate"
+    echo "  --keychain-password  Password to use for the created keychain (default: random)"
+    echo "  --password           Password for the Apple Distribution certificate"
+    echo "  --profiles           One or more Base64-encoded provisioning profiles"
+    echo "  --profiles-manifest  Path to write installed profile paths to, one per line"
+    echo "  --temp-dir           Directory for temporary files"
     exit 1
 }
 
 # Parse command line arguments
 CERTIFICATE=""
+KEYCHAIN_PASSWORD_INPUT=""
 PASSWORD=""
 PROFILES=()
+PROFILES_MANIFEST=""
 TEMP_DIR=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --certificate)
             CERTIFICATE="$2"
+            shift 2
+            ;;
+        --keychain-password)
+            KEYCHAIN_PASSWORD_INPUT="$2"
             shift 2
             ;;
         --password)
@@ -39,6 +47,10 @@ while [[ $# -gt 0 ]]; do
                 PROFILES+=("$1")
                 shift
             done
+            ;;
+        --profiles-manifest)
+            PROFILES_MANIFEST="$2"
+            shift 2
             ;;
         --temp-dir)
             TEMP_DIR="$2"
@@ -78,7 +90,7 @@ mkdir -p "$TEMP_DIR"
 # Set up paths for temporary files
 CERTIFICATE_PATH="$TEMP_DIR/distribution.p12"
 KEYCHAIN_PATH="$TEMP_DIR/build.keychain"
-KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD_INPUT:-$(openssl rand -base64 32)}"
 
 # Clean up any existing files
 rm -f "$CERTIFICATE_PATH" "$KEYCHAIN_PATH"
@@ -141,6 +153,10 @@ security list-keychain -d user -s "$KEYCHAIN_PATH"
 echo "Installing provisioning profiles..."
 mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles/
 
+if [ -n "$PROFILES_MANIFEST" ]; then
+    : > "$PROFILES_MANIFEST"
+fi
+
 for profile in "${PROFILES[@]}"; do
     PROFILE_PATH="$TEMP_DIR/profile_$(openssl rand -hex 4).mobileprovision"
     echo "Installing profile $(basename $PROFILE_PATH)"
@@ -151,10 +167,15 @@ for profile in "${PROFILES[@]}"; do
         exit 1
     fi
 
+    INSTALLED_PROFILE_PATH=~/Library/MobileDevice/Provisioning\ Profiles/"$(basename "$PROFILE_PATH")"
     cp "$PROFILE_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/
     if [ $? -ne 0 ]; then
         echo "Error: Failed to install provisioning profile"
         exit 1
+    fi
+
+    if [ -n "$PROFILES_MANIFEST" ]; then
+        echo "$INSTALLED_PROFILE_PATH" >> "$PROFILES_MANIFEST"
     fi
 
     rm -f "$PROFILE_PATH"
