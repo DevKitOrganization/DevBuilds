@@ -12,6 +12,7 @@ usage() {
     echo "Options:"
     echo "  --certificate        Base64-encoded Apple Distribution certificate"
     echo "  --keychain-password  Password to use for the created keychain (default: random)"
+    echo "  --keychain-path      Path for the created keychain (default: TEMP_DIR/build.keychain)"
     echo "  --password           Password for the Apple Distribution certificate"
     echo "  --profiles           One or more Base64-encoded provisioning profiles"
     echo "  --profiles-manifest  Path to write installed profile paths to, one per line"
@@ -22,6 +23,7 @@ usage() {
 # Parse command line arguments
 CERTIFICATE=""
 KEYCHAIN_PASSWORD_INPUT=""
+KEYCHAIN_PATH_INPUT=""
 PASSWORD=""
 PROFILES=()
 PROFILES_MANIFEST=""
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --keychain-password)
             KEYCHAIN_PASSWORD_INPUT="$2"
+            shift 2
+            ;;
+        --keychain-path)
+            KEYCHAIN_PATH_INPUT="$2"
             shift 2
             ;;
         --password)
@@ -89,7 +95,7 @@ mkdir -p "$TEMP_DIR"
 
 # Set up paths for temporary files
 CERTIFICATE_PATH="$TEMP_DIR/distribution.p12"
-KEYCHAIN_PATH="$TEMP_DIR/build.keychain"
+KEYCHAIN_PATH="${KEYCHAIN_PATH_INPUT:-$TEMP_DIR/build.keychain}"
 KEYCHAIN_PASSWORD="${KEYCHAIN_PASSWORD_INPUT:-$(openssl rand -base64 32)}"
 
 # Clean up any existing files
