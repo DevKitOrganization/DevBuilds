@@ -153,7 +153,15 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-security list-keychain -d user -s "$KEYCHAIN_PATH"
+# Add the new keychain to the beginning of the Keychain search list
+KEYCHAIN_SEARCH_LIST=("$KEYCHAIN_PATH")
+while IFS= read -r keychain_path; do
+    if [ "$keychain_path" != "$KEYCHAIN_PATH" ]; then
+        KEYCHAIN_SEARCH_LIST+=("$keychain_path")
+    fi
+done < <(security list-keychains -d user | sed 's/^[[:space:]]*"//; s/"$//')
+
+security list-keychains -d user -s "${KEYCHAIN_SEARCH_LIST[@]}"
 
 # Install the provisioning profiles
 echo "Installing provisioning profiles..."
