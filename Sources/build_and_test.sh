@@ -27,6 +27,7 @@ usage() {
     echo "  --source-packages-path PATH  Source packages checkout path (optional)"
     echo "  -t, --test-plan PLAN         Test plan to use (required for test actions)"
     echo "  --test-products-path PATH    Test products path for test-without-building"
+    echo "  --test-run-path PATH         XCTest run file for test-without-building"
     echo ""
     echo "Environment variables:"
     echo "  OTHER_XCBEAUTIFY_FLAGS       Additional flags to pass to xcbeautify"
@@ -41,6 +42,7 @@ usage() {
     echo "  XCODE_SOURCE_PACKAGES_PATH   Source packages checkout path"
     echo "  XCODE_TEST_PLAN              Test plan to use"
     echo "  XCODE_TEST_PRODUCTS_PATH     Test products path"
+    echo "  XCODE_TEST_RUN_PATH          XCTest run file path"
     exit 1
 }
 
@@ -126,6 +128,13 @@ parse_args() {
                 TEST_PRODUCTS_PATH="$2"
                 shift 2
                 ;;
+            --test-run-path)
+                if ! validate_option_value "$1" "${2:-}"; then
+                    exit 1
+                fi
+                TEST_RUN_PATH="$2"
+                shift 2
+                ;;
             *)
                 echo "Unknown option: $1"
                 usage
@@ -148,6 +157,7 @@ parse_args() {
     fi
     TEST_PLAN="${TEST_PLAN:-$XCODE_TEST_PLAN}"
     TEST_PRODUCTS_PATH="${TEST_PRODUCTS_PATH:-$XCODE_TEST_PRODUCTS_PATH}"
+    TEST_RUN_PATH="${TEST_RUN_PATH:-${XCODE_TEST_RUN_PATH:-}}"
 
     # If build path is still empty, set it to the default value
     if [ -z "$BUILD_PATH" ]; then
@@ -196,6 +206,20 @@ case "$ACTION" in
         ;;
 esac
 
+# A run file already identifies its test plan and prebuilt bundles.
+if [[ -n "$TEST_RUN_PATH" ]]; then
+    if [[ "$ACTION" != "test-without-building" ]]; then
+        echo "Error: A test run file requires the test-without-building action" >&2
+        exit 1
+    elif [[ -n "$TEST_PRODUCTS_PATH" ]]; then
+        echo "Error: Specify either a test run file or test products, not both" >&2
+        exit 1
+    elif [[ ! -f "$TEST_RUN_PATH" ]]; then
+        echo "Error: Test run file does not exist: $TEST_RUN_PATH" >&2
+        exit 1
+    fi
+fi
+
 # Parse extra flags before creating build output or starting Xcode.
 if ! parse_extra_flags "${OTHER_XCBEAUTIFY_FLAGS:-}"; then
     exit 1
@@ -217,8 +241,10 @@ XCODE_CMD=(
     -disableAutomaticPackageResolution
 )
 
-# Add standard parameters unless we're doing test-without-building with testProductsPath
-if [[ "$ACTION" != "test-without-building" || -z "$TEST_PRODUCTS_PATH" ]]; then
+# Prebuilt test inputs do not need project, scheme, or configuration arguments.
+# Keep SCHEME for log and result naming, even when it is not passed to Xcode.
+if [[ "$ACTION" != "test-without-building" ||
+      ( -z "$TEST_PRODUCTS_PATH" && -z "$TEST_RUN_PATH" ) ]]; then
     if [[ -n "$PROJECT" ]]; then
         XCODE_CMD+=(-project "$PROJECT")
     fi
@@ -231,21 +257,27 @@ if [[ "$ACTION" != "test-without-building" || -z "$TEST_PRODUCTS_PATH" ]]; then
     fi
 fi
 
-# Add common arguments (always included)
+# Add execution arguments shared by all modes.
 XCODE_CMD+=(
     -destination "$DESTINATION"
     -resultBundlePath "$RESULT_BUNDLE"
-    -derivedDataPath "$DERIVED_DATA_PATH"
 )
 
-# Add source packages checkout path if specified
-if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
-    XCODE_CMD+=(-clonedSourcePackagesDirPath "$SOURCE_PACKAGES_PATH")
+# Run files locate their own build products without project or package directories.
+if [[ -z "$TEST_RUN_PATH" ]]; then
+    XCODE_CMD+=(-derivedDataPath "$DERIVED_DATA_PATH")
+    if [[ -n "$SOURCE_PACKAGES_PATH" ]]; then
+        XCODE_CMD+=(-clonedSourcePackagesDirPath "$SOURCE_PACKAGES_PATH")
+    fi
 fi
 
 # Add test products path if specified
 if [[ -n "$TEST_PRODUCTS_PATH" ]]; then
     XCODE_CMD+=(-testProductsPath "$TEST_PRODUCTS_PATH")
+fi
+
+if [[ -n "$TEST_RUN_PATH" ]]; then
+    XCODE_CMD+=(-xctestrun "$TEST_RUN_PATH")
 fi
 
 # Add caller-supplied flags last so they follow all generated arguments

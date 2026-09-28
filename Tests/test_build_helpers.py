@@ -12,7 +12,7 @@ ARCHIVE_HELPER = 'archive_and_export.sh'
 BUILD_OPTIONS = [
     '-a', '--action', '-b', '--build-path', '-c', '--config', '--derived-data-path',
     '-d', '--destination', '-p', '--project', '-s', '--scheme', '--source-packages-path',
-    '-t', '--test-plan', '--test-products-path',
+    '-t', '--test-plan', '--test-products-path', '--test-run-path',
 ]
 ARCHIVE_OPTIONS = [
     '--auth-key-id', '--auth-key-issuer-id', '--auth-key-path', '-b', '--build-path',
@@ -109,6 +109,69 @@ class BuildHelperTests(HelperTestCase):
         self.assert_option(arguments, '-testProductsPath', 'Example Test Products')
         for option in ('-project', '-scheme', '-configuration'):
             self.assertNotIn(option, arguments)
+
+    def test_test_run_cli_and_environment_preserve_execution_options(self):
+        run_file = self.root / 'Generated Runs/Custom Plan.xctestrun'
+        run_file.parent.mkdir()
+        run_file.touch()
+        cases = [
+            (['--test-run-path', str(run_file)], {}),
+            ([], {'XCODE_TEST_RUN_PATH': str(run_file)}),
+            (['--test-run-path', str(run_file)], {'XCODE_TEST_RUN_PATH': 'ignored.xctestrun'}),
+        ]
+        for options, environment in cases:
+            with self.subTest(options=options, environment=environment):
+                self.reset_case()
+                environment.update(XCODE_TEST_PLAN='ignored plan',
+                                   XCODE_DERIVED_DATA_PATH='ignored derived',
+                                   XCODE_SOURCE_PACKAGES_PATH='ignored packages',
+                                   OTHER_XCODE_FLAGS="-retry-tests-on-failure '-only-testing:Custom Tests'")
+                result = self.run_helper(options=['--action', 'test-without-building', *options],
+                                         environment=environment)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                arguments = self.calls()[0]['arguments']
+                self.assertEqual(arguments[0], 'test-without-building')
+                self.assert_option(arguments, '-xctestrun', str(run_file))
+                for option in ('-project', '-workspace', '-scheme', '-configuration', '-testPlan',
+                               '-testProductsPath', '-derivedDataPath', '-clonedSourcePackagesDirPath'):
+                    self.assertNotIn(option, arguments)
+                self.assert_option(arguments, '-destination', 'platform=iOS Simulator,name=Example')
+                self.assert_option(arguments, '-resultBundlePath',
+                                   str(self.output / 'Example_test-without-building.xcresult'))
+                self.assertEqual(arguments[-2:], ['-retry-tests-on-failure', '-only-testing:Custom Tests'])
+                self.assertIn('Mock Xcode output',
+                              (self.output / 'Example_test-without-building.log').read_text())
+
+    def test_invalid_test_run_inputs_fail_before_output(self):
+        run_file = self.root / 'existing.xctestrun'
+        run_file.touch()
+        cases = [
+            (['--test-run-path', str(run_file), '--action', action], 'requires')
+            for action in ('build', 'build-for-testing', 'test')
+        ]
+        cases += [
+            (['--test-run-path', str(run_file), '--test-products-path', 'Products'], 'not both'),
+            (['--test-run-path', 'missing.xctestrun'], 'does not exist'),
+            (['--test-run-path', str(self.root)], 'does not exist'),
+        ]
+        for options, message in cases:
+            with self.subTest(options=options):
+                self.reset_case()
+                result = self.run_helper(options=['--action', 'test-without-building', *options])
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertIn(message, result.stderr)
+                self.assertFalse(self.output.exists())
+                self.assertEqual(list(self.capture.iterdir()), [])
+
+    def test_failed_test_run_preserves_log_and_xcode_status(self):
+        run_file = self.root / 'existing.xctestrun'
+        run_file.touch()
+        result = self.run_helper(options=['--action', 'test-without-building',
+                                         '--test-run-path', str(run_file)],
+                                 environment={'TEST_BUILD_STATUS': '23'})
+        self.assertEqual(result.returncode, 23, result.stderr)
+        self.assertIn('Mock Xcode output',
+                      (self.output / 'Example_test-without-building.log').read_text())
 
     def test_every_value_option_rejects_missing_empty_or_option_values(self):
         for helper, options in ((BUILD_HELPER, BUILD_OPTIONS), (ARCHIVE_HELPER, ARCHIVE_OPTIONS)):
