@@ -13,6 +13,7 @@ pull requests.
 
   - Extra-flag parsing, including quotes, escapes, empty arguments, and rejected shell syntax.
   - Build and archive arguments, persistent build paths, defaults, and CLI/environment precedence.
+  - XCTest run-file execution without project or package arguments, and invalid input rejection.
   - Invalid options and flags failing before build output is created or commands are started.
   - Literal parameter values and shell-escaped command logging.
   - Pipeline failure precedence and preventing export after a failed archive.
