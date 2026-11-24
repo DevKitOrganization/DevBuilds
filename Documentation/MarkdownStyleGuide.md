@@ -1,12 +1,6 @@
----
-description: Markdown formatting conventions for documentation in the Shopper iOS codebase
-read-when: Writing or editing a Markdown doc here and unsure of line length, headers, or list style
----
-
 # Markdown Style Guide
 
-This document defines the Markdown formatting standards for documentation in the Shopper iOS
-codebase.
+This document defines the Markdown formatting standards for documentation in this project.
 
 
 ## General Formatting
@@ -17,21 +11,21 @@ Keep all lines under **100 characters**. Break long sentences and paragraphs at 
 to stay within this limit.
 
     ✅ Good:
-    The codebase uses a consistent approach to mocking based on the DevTesting framework’s
-    `Stub` type. All mocks follow standardized patterns.
-
+    Faucibus consectetur lacinia nostra eros conubia nibh inceptos hendrerit, ante blandit 
+    vulputate imperdiet amet porttitor torquent mattis.
+    
     ❌ Bad:
-    The codebase uses a consistent approach to mocking based on the DevTesting framework’s `Stub` type. All mocks follow standardized patterns that make them predictable, testable, and maintainable.
+    Faucibus consectetur lacinia nostra eros conubia nibh inceptos hendrerit, ante blandit vulputate imperdiet amet porttitor torquent mattis.
 
 
 ### Spacing
 
 Use consistent spacing for visual hierarchy:
 
-- **Between major sections**: 2 blank lines
-- **After code blocks**: 1 blank line
-- **Before subsections**: 1 blank line
-- **After section headers**: 1 blank line
+  - **Between major sections**: 2 blank lines
+  - **After code blocks**: 1 blank line
+  - **Before subsections**: 1 blank line
+  - **After section headers**: 1 blank line
 
 Example:
 
@@ -160,9 +154,19 @@ Use backticks for:
 
 Use consistent terminology throughout documents:
 
-- Prefer "function" over "method" when referring to Swift functions
-- Use "type" instead of "class" when referring generically to classes/structs/enums
-- Use "property" for stored and computed properties
+  - Prefer “function” over “method” when referring to Swift functions
+  - Use “type” instead of “class” when referring generically to classes/structs/enums
+  - Use “property” for stored and computed properties
+
+
+## Typography
+
+Use typographic quotes and apostrophes, not straight ones, in prose: ’ for apostrophes (“it’s”),
+‘ and ’ for single quotes, and “ and ” for double quotes. Straight quotes remain correct inside code
+spans and code blocks.
+
+The same rule applies to code documentation (doc comments and standalone comments) and to
+user-facing strings.
 
 
 ## File Structure Examples
@@ -170,14 +174,14 @@ Use consistent terminology throughout documents:
 Use indented text blocks for file structure diagrams:
 
     Tests/
-    ├── AppPlatformTests/
-    │   └── Testing Support/
-    │       ├── MockAppServices.swift
-    │       └── MockBootstrapper.swift
-    └── TelemetryTests/
-        └── Testing Support/
-            ├── MockTelemetryDestination.swift
-            └── MockError.swift
+    ├── Folder 1/
+    │   └── Folder 2/
+    │       ├── File1.swift
+    │       └── File2.swift
+    └── Folder 3/
+        └── Folder 4/
+            ├── File3.swift
+            └── File4.swift
 
 
 ## Links and References
@@ -192,4 +196,4 @@ Use relative paths for internal documentation:
 
 Reference specific locations using this pattern:
 
-    The main implementation is in `AppPlatform.swift:42-68`.
+    The main implementation is in `Stub.swift:42-68`.
