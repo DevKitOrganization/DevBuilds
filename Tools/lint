@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Lints Markdown using the rules in .rumdl.toml.
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+exec "$SCRIPT_DIR/rumdl" check "$REPO_ROOT"

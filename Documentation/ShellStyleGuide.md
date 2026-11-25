@@ -74,7 +74,8 @@ why a step is needed or why the shell behavior is surprising. Avoid narrating ob
   - Separate a local declaration from command substitution so `local` does not hide the
     command's exit status.
 
-    # Print the canonical path of an existing directory. Return nonzero if it is inaccessible.
+    # Print the canonical path of an existing directory. Return nonzero if it is inaccessible
+
     resolve_directory() {
         local directory="$1"
 
